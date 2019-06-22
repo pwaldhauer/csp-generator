@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<title>CSP Generator</title>
+<style>
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+
+body, input {
+
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 300;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+}
+
+.m-xs {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+
+.mb-sm {
+    margin-bottom: 2rem;
+}
+
+.App {
+    margin: 2rem;
+}
+
+.Output {
+    width: 100%;
+    font-family: monospace;
+    font-size: 1rem;
+    padding: 1rem;
+    border: 1px #aaa solid;
+}
+
+.Output-help  {
+    font-style: italic;
+    color: #666;
+}
+
+.Panel {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+
+
+.Panel-fieldset {
+    width: 24%;
+    padding: 1rem;
+    margin-bottom: 1rem;
+
+    border: 1px #aaa solid;
+}
+
+.Panel-fieldset legend {
+    padding: 0 0.5rem;
+    font-weight: bold;
+}
+
+.Fieldset-row {
+    margin-bottom: 0.2rem;
+}
+
+.Fieldset-input {
+    padding: 0.25rem;
+    font-size: 0.75rem;
+    width: 100%;
+}
+
+.Fieldset-button {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+    font-weight: bold;
+}
+</style>
+<body>
+
+<div class="App">
+    <h1 class="mb-sm">CSP Generator</h1>
+
+    <div class="Output " contenteditable v-html="cspString"></div>
+    <p class="Output-help mb-sm">Use controls below, or paste current CSP rules to edit</p>
+
+    <div class="Panel">
+        <fieldset class="Panel-fieldset" v-for="directive in Object.keys(srcDirectives)"  v-if="rules[directive]" :style="directiveStyle(directive)" :id="directive">
+            <legend>{{directive}}</legend>
+
+        <div class="Fieldset-row" v-for="b in srcDirectives[directive].values">
+            <label><input type="checkbox" v-model="rules[directive][b]"> {{b}}</label>
+        </div>
+
+        <hr class="m-xs">
+
+        <div class="Fieldset-row" v-for="domain in rules[directive].domains">
+            <input class="Fieldset-input" type="text" placeholder="Custom Domain" v-model="domain.url" v-on:keyup.13="addEmptyDomain(directive)">
+        </div>
+
+    </fieldset>
+    </div>
+
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script>
+
+const DIRECTIVE_MAPPING = {
+    all: '*',
+    none: '\'none\'',
+    self: '\'self\'',
+    data: 'data:',
+    'unsafe-inline': '\'unsafe-inline\'',
+    'unsafe-eval': '\'unsafe-eval\'',
+};
+
+
+var app = new Vue({
+  el: '.App',
+  data: {
+    cspInput: '',
+
+    rules: {
+
+    },
+
+    directiveMapping: {
+
+    },
+
+    srcDirectives: {
+        'default-src': {color: '#FFBDB3', values: ['none', 'all', 'self', 'data', 'unsafe-inline', 'unsafe-eval']},
+        'script-src': {color: '#98D0BF', values: ['none', 'all', 'self', 'data', 'unsafe-inline', 'unsafe-eval']},
+        'style-src': {color: '#798899', values: ['none', 'all', 'self', 'data', 'unsafe-inline']},
+        'img-src':{color: '#D5D3C8', values:  ['none', 'all', 'self', 'data']},
+        'font-src':{color: '#F68EA1', values:  ['none', 'all', 'self', 'data']},
+        'connect-src': {color: '#FF6F59', values: ['none', 'all', 'self']},
+        'media-src': {color: '#43AA8B', values: ['none', 'all', 'self']},
+        'object-src':{color: '#A6AFBB', values: ['none', 'all', 'self']},
+        'prefetch-src': {color: '#B9B7A4', values: ['none', 'all', 'self']},
+        'child-src': {color: '#F04263', values: ['none', 'all', 'self']},
+        'frame-src': {color: '#8C3D31', values: ['none', 'all', 'self']},
+        'worker-src': {color: '#255D4C', values: ['none', 'all', 'self']},
+        'frame-ancestors': {color: '#727163', values: ['none', 'all', 'self']},
+        'form-action': {color: '#991F36', values: ['none', 'all', 'self']},
+    }
+  },
+
+  methods: {
+    addEmptyDomain(directive) {
+        this.rules[directive].domains.push({url: ''})
+        Vue.nextTick(() => {
+            const inputs = this.$el.querySelectorAll(`#${directive} .Fieldset-input`);
+            inputs[inputs.length -1].focus();
+        })
+    },
+    directiveStyle(directive) {
+        return `background-color: ${this.srcDirectives[directive].color}`;
+    }
+  },
+
+  computed: {
+    cspString() {
+        const output = [];
+
+        Object.keys(this.srcDirectives).forEach(key => {
+            if(!this.rules[key]) {
+                return;
+            }
+
+            const group = [];
+
+
+
+            this.srcDirectives[key].values.forEach(v => {
+                if(this.rules[key][v]) {
+                    if(!group.length) {
+                        group.push(key);
+                    }
+
+                    const value = DIRECTIVE_MAPPING[v] || v;
+                    group.push(value);
+                }
+            })
+
+            if(this.rules[key]['domains']) {
+                this.rules[key]['domains'].forEach(domain => {
+                    if(!domain.url) {
+                        return;
+                    }
+
+                    if(!group.length) {
+                        group.push(key);
+                    }
+
+                    group.push(domain.url)
+                })
+            }
+
+            output.push({key, string: group.join(' ')})
+
+        });
+
+
+
+        return output.filter(i => !!i.string).map(i => {
+            return `<span style="background-color: ${this.srcDirectives[i.key].color};">${i.string}</span>`
+        }).join('; ')
+    }
+  },
+
+  watch: {
+    cspInput() {
+        this.rules = {};
+
+        const directives = this.cspInput.split(';');
+        directives.forEach(directive => {
+            const options = directive.split(' ');
+            const diretiveMappingValues = Object.values(DIRECTIVE_MAPPING);
+
+            let directiveName = ''
+            options.forEach((option, idx) => {
+                if(!option) {
+                    return;
+                }
+
+
+                if(!directiveName) {
+                    directiveName = option;
+                    Vue.set(this.rules, option, {domains: []});
+                    return;
+                }
+
+                for(let key in DIRECTIVE_MAPPING) {
+                    if(option == DIRECTIVE_MAPPING[key]) {
+                        Vue.set(this.rules[directiveName], key, true);
+                        return;
+                    }
+                }
+
+                this.rules[directiveName].domains.push({url: option});
+            })
+        })
+    }
+  },
+
+  mounted() {
+    document.querySelector('.Output').addEventListener('paste', (event) => {
+        event.preventDefault();
+        const paste = (event.clipboardData || window.clipboardData).getData('text');
+        this.cspInput = paste;
+    });
+
+
+    Object.keys(this.srcDirectives).forEach(key => {
+        Vue.set(this.rules, key, {});
+        this.srcDirectives[key].values.forEach(value => {
+            Vue.set(this.rules[key], value, false);
+        })
+
+
+        Vue.set(this.rules[key], 'domains', [{url: ''}])
+    })
+  }
+})
+</script>
+</body>

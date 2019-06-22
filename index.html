@@ -154,10 +154,23 @@ var app = new Vue({
         'worker-src': {color: '#255D4C', values: ['none', 'all', 'self']},
         'frame-ancestors': {color: '#727163', values: ['none', 'all', 'self']},
         'form-action': {color: '#991F36', values: ['none', 'all', 'self']},
+        'manifest-src': {color: '#22AAA1', values: ['none', 'all', 'self']},
     }
   },
 
   methods: {
+    initializeDefaultRules(emptyDomain) {
+        Object.keys(this.srcDirectives).forEach(key => {
+            Vue.set(this.rules, key, {});
+            this.srcDirectives[key].values.forEach(value => {
+                Vue.set(this.rules[key], value, false);
+            })
+
+
+            Vue.set(this.rules[key], 'domains', emptyDomain ? [{url: ''}] : [])
+        })
+    },
+
     addEmptyDomain(directive) {
         this.rules[directive].domains.push({url: ''})
         Vue.nextTick(() => {
@@ -223,11 +236,12 @@ var app = new Vue({
   watch: {
     cspInput() {
         this.rules = {};
+        this.initializeDefaultRules(false)
+
 
         const directives = this.cspInput.split(';');
         directives.forEach(directive => {
             const options = directive.split(' ');
-            const diretiveMappingValues = Object.values(DIRECTIVE_MAPPING);
 
             let directiveName = ''
             options.forEach((option, idx) => {
@@ -235,22 +249,29 @@ var app = new Vue({
                     return;
                 }
 
-
                 if(!directiveName) {
-                    directiveName = option;
-                    Vue.set(this.rules, option, {domains: []});
+                    directiveName = option
+                    return;
+                }
+
+                if(!this.rules[directiveName]) {
+                    console.log('Directive not found: ' + directiveName);
                     return;
                 }
 
                 for(let key in DIRECTIVE_MAPPING) {
                     if(option == DIRECTIVE_MAPPING[key]) {
                         Vue.set(this.rules[directiveName], key, true);
-                        return;
+                        return
                     }
                 }
 
                 this.rules[directiveName].domains.push({url: option});
             })
+
+            if(this.rules[directiveName] && !this.rules[directiveName].domains.length) {
+                this.rules[directiveName].domains.push({url: ''})
+            }
         })
     }
   },
@@ -264,15 +285,7 @@ var app = new Vue({
     });
 
 
-    Object.keys(this.srcDirectives).forEach(key => {
-        Vue.set(this.rules, key, {});
-        this.srcDirectives[key].values.forEach(value => {
-            Vue.set(this.rules[key], value, false);
-        })
-
-
-        Vue.set(this.rules[key], 'domains', [{url: ''}])
-    })
+    this.initializeDefaultRules();
   }
 })
 </script>
